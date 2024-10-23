@@ -2,7 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
-from .terrain import generate_reference_and_limits
+from terrain import generate_reference_and_limits
+import csv
 
 class Submarine:
     def __init__(self):
@@ -57,7 +58,7 @@ class Trajectory:
                          color='saddlebrown', alpha=0.3)
         plt.fill_between(x_values, max_height*np.ones(len(x_values)), mission.cave_height, 
                          color='saddlebrown', alpha=0.3)
-        plt.plot(self.position[:, 0], self.position[:, 1], label='Trajectory')
+        plt.plot(self.position[:, 0], self.position[:, 1], 'g', label='Trajectory')
         plt.plot(mission.reference, 'r', linestyle='--', label='Reference')
         plt.legend(loc='upper right')
         plt.show()
@@ -75,8 +76,23 @@ class Mission:
 
     @classmethod
     def from_csv(cls, file_name: str):
-        # You are required to implement this method
-        pass
+        references = []
+        cave_heights = []
+        cave_depths = []
+
+        with open(file_name, mode='r') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                references.append(np.fromstring(row['reference'], sep=','))
+                cave_heights.append(np.fromstring(row['cave_height'], sep=','))
+                cave_depths.append(np.fromstring(row['cave_depth'], sep=','))
+
+        # Convert lists of arrays to single arrays
+        reference = np.concatenate(references)
+        cave_height = np.concatenate(cave_heights)
+        cave_depth = np.concatenate(cave_depths)
+
+        return cls(reference, cave_height, cave_depth)
 
 
 class ClosedLoop:
@@ -98,10 +114,11 @@ class ClosedLoop:
             positions[t] = self.plant.get_position()
             observation_t = self.plant.get_depth()
             # Call your controller here
+            actions[t] = self.controller.compute_control(mission.reference[t], observation_t)
             self.plant.transition(actions[t], disturbances[t])
 
         return Trajectory(positions)
-        
+
     def simulate_with_random_disturbances(self, mission: Mission, variance: float = 0.5) -> Trajectory:
         disturbances = np.random.normal(0, variance, len(mission.reference))
         return self.simulate(mission, disturbances)
